@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>움이고 QR 포스터 인쇄</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+@page{size:A4 portrait;margin:0}
+*{box-sizing:border-box}
+body{margin:0;background:#E9DFC4;font-family:'Noto Sans KR',sans-serif;color:#2A2620;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.jua{font-family:Jua,sans-serif}
+.bar{position:sticky;top:0;background:#FFF6DC;padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:2px solid #EADBB4;z-index:2}
+.bar input,.bar button{font-family:inherit;font-size:16px;padding:10px 14px;border-radius:12px;border:2px solid #EADBB4}
+.bar button{background:#3C7F1E;color:#fff;border:0;font-weight:700;cursor:pointer}
+.page{width:210mm;height:297mm;margin:10mm auto;background:#fff;display:flex;flex-direction:column;page-break-after:always;break-after:page;overflow:hidden}
+.half{height:148.5mm;padding:8mm;display:flex}
+.half+.half{border-top:1px dashed #ccc}
+.poster{flex:1;border-radius:8mm;border:3mm solid;display:flex;align-items:center;gap:6mm;padding:6mm 8mm;background:#FFFDF6;position:relative}
+.poster .umi{width:62mm;height:80mm;object-fit:contain}
+.poster .mid{flex:1;display:flex;flex-direction:column;gap:2.5mm;min-width:0}
+.poster .qr{width:58mm;height:58mm;flex:none}
+.poster .qr svg{width:100%;height:100%}
+.chip{align-self:flex-start;color:#fff;font-weight:700;font-size:11pt;border-radius:99px;padding:1.2mm 4mm}
+.code{font-family:monospace;font-size:12pt;letter-spacing:1px;color:#5C5346;text-align:center;margin-top:2mm}
+.foot{position:absolute;left:8mm;right:8mm;bottom:3.5mm;font-size:8.5pt;color:#6B6052;display:flex;justify-content:space-between}
+@media print{body{background:#fff}.bar{display:none}.page{margin:0}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b class="jua" style="font-size:20px">QR 포스터 인쇄</b>
+  <form id="f" style="display:flex;gap:8px"><input id="pin" type="password" placeholder="운영자 PIN" style="text-transform:uppercase"><button>포스터 만들기</button></form>
+  <button id="printBtn" style="display:none">인쇄하기 (A4, 배율 100%)</button>
+  <span style="font-size:13px;color:#5C5346">A4 한 장에 포스터 2장 · 점선을 따라 자르세요. 첫 장은 1층 로비 시작 포스터예요.</span>
+</div>
+<div id="out"></div>
+<script src="vendor/qrcode.js"></script>
+<script src="js/umigo.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id), E = UMIGO.esc;
+const qrSvg = text => { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); };
+try { const p = sessionStorage.getItem('umigo_admin'); if (p) $('pin').value = p; } catch (e) {}
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const st = await UMIGO.rpc('umigo_admin', { p_pin: $('pin').value.trim().toUpperCase(), p_action: 'stations', p_args: {} });
+  if (!Array.isArray(st)) { alert('PIN이 맞지 않아요'); return; }
+  const start = `<div class="page"><div style="flex:1;margin:12mm;border-radius:10mm;border:4mm solid #3C7F1E;background:#FFF6DC;display:flex;flex-direction:column;align-items:center;padding:12mm;gap:5mm;text-align:center">
+    <div style="font-size:14pt;font-weight:700;color:#2F4D8C">2026 YTUS CTL · The UM Festival</div>
+    <div class="jua" style="font-size:64pt;line-height:1">UMiGo <span style="color:#3C7F1E">움이고</span></div>
+    <div class="jua" style="font-size:28pt">캠퍼스에 숨은 움이 11마리를 찾아라!</div>
+    <img src="assets/umi.png" style="width:70mm">
+    <div style="width:80mm;height:80mm">${qrSvg(UMIGO.site)}</div>
+    <div style="font-size:15pt;line-height:1.7;font-weight:500">① QR을 찍고 닉네임을 정해요 &nbsp; ② 지도를 보며 움이 포스터를 찾아요<br>③ 움이를 5번 톡톡 잡고 OX 퀴즈를 풀어요 &nbsp; ④ 5종 모으면 <b>2층 세미나실</b>에서 움이 마그네틱!</div>
+    <div style="font-size:12pt;color:#6B6052">${E(UMIGO.site)} · 11:00~16:00 · 걸을 땐 화면 대신 앞을 봐 주세요</div></div></div>`;
+  const posters = st.map(s => `<div class="half"><div class="poster" style="border-color:${s.color}">
+      <img class="umi" src="${UMIGO.img(s.img)}" alt="">
+      <div class="mid">
+        <span class="chip" style="background:${s.color}">${E(s.period)} · ${E(s.sub)}</span>
+        <div class="jua" style="font-size:30pt;line-height:1.1">${E(s.name)}</div>
+        <div class="jua" style="font-size:17pt;color:${s.color}">${s.is_gold ? '정각에만 잡을 수 있어요!' : '움이를 찾았다!'}</div>
+        <div style="font-size:11pt;line-height:1.5;color:#4A4237">QR을 찍어 움이를 잡아요.<br>처음이면 <b>UMiGo</b>에서 닉네임부터!</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center"><div class="qr">${qrSvg(UMIGO.site + '?s=' + s.qr_code)}</div><div class="code">코드 ${E(s.qr_code)}</div></div>
+      <div class="foot"><span>UMiGo 움이고 · 교수학습지원센터 CTL</span><span>No.${String(s.no).padStart(2, '0')}${s.memo ? ' · ' + E(s.memo) : ''}</span></div>
+    </div></div>`);
+  let pages = start;
+  for (let i = 0; i < posters.length; i += 2) pages += `<div class="page">${posters[i]}${posters[i + 1] || ''}</div>`;
+  $('out').innerHTML = pages; $('printBtn').style.display = '';
+});
+$('printBtn').addEventListener('click', () => window.print());
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>움이고 순위판</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#2A2620;overflow:hidden;font-family:'Noto Sans KR',sans-serif}
+.jua{font-family:Jua,sans-serif}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center center;box-sizing:border-box;background:#FFF6DC;color:#2A2620;display:grid;grid-template-columns:640px 1fr 560px;gap:32px;padding:48px}
+.hero{position:relative;border-radius:40px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:44px;color:#fff}
+.hero>img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero .dim{position:absolute;inset:0;background:rgba(42,34,21,.42)}
+.hero>*:not(.bg):not(.dim){position:relative}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
+.box{background:#fff;border-radius:28px;padding:24px 28px}
+.lbl{font-size:22px;font-weight:700;color:#6B6052}
+.num{font-family:Jua;font-size:72px;line-height:1.1;white-space:nowrap}
+.feed-row{display:flex;align-items:center;gap:18px;padding:14px 0;border-top:2px solid #F3EBD3;animation:slide .6s ease-out}
+@keyframes slide{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:none}}
+.fame-row{display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.1);border-radius:18px;padding:14px 18px}
+#alert{position:absolute;inset:0;background:rgba(42,34,21,.88);display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px;color:#FFE08A;z-index:5}
+#alert.on{display:flex}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="hero">
+    <img class="bg" src="assets/wide.jpg" alt=""><div class="dim"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <span style="align-self:flex-start;background:rgba(255,255,255,.92);color:#2F4D8C;font-size:20px;font-weight:700;padding:8px 18px;border-radius:999px">2026 YTUS CTL · The UM Festival</span>
+      <div class="jua" style="font-size:104px;line-height:1;margin-top:10px">UMiGo</div>
+      <div class="jua" style="font-size:44px;color:#FFE08A">움이를 찾아라!</div>
+    </div>
+    <img src="assets/umi.png" alt="" style="width:300px;align-self:center;animation:bob 2s ease-in-out infinite">
+    <div style="background:#F2B705;color:#2A2215;border-radius:28px;padding:22px 26px;display:flex;align-items:center;gap:18px">
+      <img src="assets/kinds/gold.png" alt="" style="width:70px">
+      <div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700" id="goldLbl">다음 황금 움이</span><span class="jua" style="font-size:50px;line-height:1" id="goldTxt">–</span></div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:24px;min-width:0">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+      <div class="box"><div class="lbl">참가자</div><div class="num" style="color:#2F4D8C"><span id="nP">0</span><span style="font-size:32px">명</span></div></div>
+      <div class="box"><div class="lbl">잡힌 움이</div><div class="num" style="color:#C2503B"><span id="nC">0</span><span style="font-size:32px">번</span></div></div>
+      <div class="box"><div class="lbl">남은 마그네틱</div><div class="num" style="color:#3C7F1E"><span id="nM">0</span><span style="font-size:32px" id="nMT">/100</span></div></div>
+    </div>
+    <div class="box" style="flex:1;border-radius:32px;padding:30px 34px;display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><span style="width:14px;height:14px;border-radius:50%;background:#E8705A"></span><span class="jua" style="font-size:38px">방금 잡았어요</span></div>
+      <div id="feed"></div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:24px">
+    <div style="background:#2F4D8C;color:#fff;border-radius:32px;padding:30px 32px;display:flex;flex-direction:column;gap:12px;min-height:420px">
+      <div class="jua" style="font-size:38px">명예의 전당</div>
+      <div id="fame" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+    <div class="box" style="flex:1;border-radius:32px;display:flex;flex-direction:column;gap:14px">
+      <div class="jua" style="font-size:32px">QR 찍고 바로 참여!</div>
+      <div style="display:flex;gap:22px;align-items:center">
+        <div id="qr" style="width:190px;height:190px;flex:none"></div>
+        <div style="font-size:22px;line-height:1.6;color:#4A4237">움이 <b id="thTxt">5</b>종 모으면<br><b style="color:#2A2620">움이 마그네틱</b>을<br>이곳에서 드려요</div>
+      </div>
+    </div>
+  </div>
+  <div id="alert"><img src="assets/gold_glow.png" alt="" style="width:420px;animation:bob 1.6s ease-in-out infinite"><div class="jua" style="font-size:96px" id="alertTxt">황금 움이 출현!</div><div style="font-size:34px;color:#fff" id="alertSub">15분 동안만 머물러요</div></div>
+</div>
+<script src="vendor/qrcode.js"></script>
+<script src="js/umigo.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id), E = UMIGO.esc;
+function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); $('stage').style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+try { const q = qrcode(0, 'M'); q.addData(UMIGO.site); q.make(); $('qr').innerHTML = q.createSvgTag({ cellSize: 6, margin: 0, scalable: true }); $('qr').firstChild.style.width = $('qr').firstChild.style.height = '100%'; } catch (e) {}
+const ago = t => { const m = Math.floor((Date.now() - new Date(t)) / 60000); return m < 1 ? '방금' : m + '분 전'; };
+let lastTop = null, wasGold = false;
+async function tick() {
+  let r; try { r = await UMIGO.rpc('umigo_board'); } catch (e) { return; }
+  $('nP').textContent = r.players; if (r.prize_threshold) $('thTxt').textContent = r.prize_threshold; $('nC').textContent = r.catches;
+  $('nM').textContent = Math.max(0, Number(r.magnets_total) - r.magnets_given); $('nMT').textContent = '/' + r.magnets_total;
+  const top = r.feed[0] ? r.feed[0].at : null;
+  if (top !== lastTop) {
+    $('feed').innerHTML = r.feed.length ? r.feed.slice(0, 6).map(f => `<div class="feed-row"><img src="${UMIGO.img(f.img)}" alt="" style="width:58px;height:62px;object-fit:contain"><div style="flex:1;font-size:28px;font-weight:700;line-height:1.3;word-break:keep-all">${E(f.who)}<span style="font-weight:500;color:#6B6052"> 님이 </span><span style="color:${f.color};font-weight:900">${E(f.umi)}</span><span style="font-weight:500;color:#6B6052"> 포획!</span></div><div style="font-size:22px;color:#6B6052" data-at="${E(f.at)}">${ago(f.at)}</div></div>`).join('') : '<div style="font-size:28px;color:#6B6052;padding:30px 0">첫 번째 움이를 잡을 주인공은 누구?</div>';
+    lastTop = top;
+  } else document.querySelectorAll('[data-at]').forEach(el => el.textContent = ago(el.dataset.at));
+  $('fame').innerHTML = r.fame.length ? r.fame.map(h => `<div class="fame-row"><img src="${h.img === 'gold' ? 'assets/kinds/gold.png' : 'assets/umi.png'}" alt="" style="width:46px;height:52px;object-fit:contain"><div style="flex:1;font-size:28px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(h.who)}</div><div style="font-size:20px;color:#FFD866;font-weight:700">${E(h.what)}</div></div>`).join('') : '<div style="font-size:22px;color:#D6E0F5">11종을 모두 모으거나 황금 움이를 잡으면 여기에 이름이 올라가요!</div>';
+  const g = r.gold;
+  if (g.active) {
+    $('goldLbl').textContent = '황금 움이 출현 중!';
+    $('goldTxt').textContent = g.ends_at ? `${Math.max(0, Math.ceil((new Date(g.ends_at) - Date.now()) / 60000))}분 남음` : '지금!';
+    if (!wasGold) { $('alertSub').textContent = `${g.minutes}분 동안만 머물러요 · 지도의 ★을 찾아가요`; $('alert').classList.add('on'); setTimeout(() => $('alert').classList.remove('on'), 12000); }
+  } else if (g.next_at) {
+    const d = new Date(g.next_at), m = Math.max(0, Math.ceil((d - Date.now()) / 60000));
+    $('goldLbl').textContent = '다음 황금 움이'; $('goldTxt').textContent = `${d.getHours()}:00 · ${m}분 후`;
+  } else { $('goldLbl').textContent = '황금 움이'; $('goldTxt').textContent = '오늘 출현 끝!'; }
+  wasGold = g.active;
+}
+tick(); setInterval(tick, 5000);
+})();
+</script>
+</body>
+</html>
