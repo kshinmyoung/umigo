@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>움이고 · 스테이션 위치 답사</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{--bg:#fffaf0;--ink:#2b2b2b;--sub:#777;--gold:#e8a81c;--green:#5aa832;--line:#eadfca;--ok:#2e9d4f;--mid:#e0a100;--bad:#d64545}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:14px 16px 8px;display:flex;align-items:center;gap:10px}
+  header .leaf{font-size:26px}
+  header h1{font-size:18px;margin:0}
+  header p{margin:2px 0 0;font-size:12px;color:var(--sub)}
+  .card{background:#fff;margin:10px 12px;border-radius:16px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);border:1px solid var(--line)}
+  .live{display:flex;align-items:center;gap:10px;font-size:14px}
+  .dot{width:12px;height:12px;border-radius:50%;background:#bbb;flex:none}
+  .live b{font-size:20px}
+  label{font-size:13px;color:var(--sub);display:block;margin:10px 0 4px}
+  select,input{width:100%;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff}
+  button{font-size:16px;border:0;border-radius:12px;padding:12px 14px;cursor:pointer}
+  .big{width:100%;margin-top:12px;font-size:18px;padding:16px;background:var(--green);color:#fff;font-weight:700}
+  .big:disabled{background:#aaa}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .ghost{background:#f2ece0;color:var(--ink)}
+  .danger{background:#fbe3e3;color:var(--bad)}
+  #map{height:300px;border-radius:12px;margin-top:6px}
+  .bar{height:10px;background:#eee;border-radius:6px;overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s}
+  #measure{font-size:14px;margin-top:8px;color:var(--sub);min-height:20px}
+  .item{border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start}
+  .item:first-child{border-top:0}
+  .tag{font-size:12px;border-radius:999px;padding:2px 8px;color:#fff;white-space:nowrap}
+  .item .t{flex:1;font-size:14px}
+  .item .t small{color:var(--sub);display:block;margin-top:2px}
+  .warn{color:var(--bad);font-size:12px}
+  .x{background:none;color:var(--sub);padding:4px 6px;font-size:18px}
+  .help{font-size:13px;color:var(--sub);line-height:1.6}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999}
+  .toast.on{opacity:.95}
+</style>
+</head>
+<body>
+<header>
+  <div class="leaf">🌱</div>
+  <div><h1>움이고 · 스테이션 위치 답사</h1><p>움이를 숨길 자리에 서서 "이 자리 저장"을 누르세요</p></div>
+</header>
+
+<div class="card">
+  <div class="live"><span class="dot" id="dot"></span><div>지금 GPS 정확도 <b id="acc">–</b><div style="font-size:12px;color:var(--sub)" id="accTxt">위치 권한을 허용해 주세요</div></div></div>
+  <div id="map"></div>
+</div>
+
+<div class="card">
+  <label for="station">어떤 움이 자리인가요?</label>
+  <select id="station"></select>
+  <label for="memo">메모 (예: 도서관 앞 벤치 옆 나무)</label>
+  <input id="memo" placeholder="포스터 붙일 곳을 적어 두면 좋아요">
+  <button class="big" id="saveBtn">📍 이 자리 저장 (10초 측정)</button>
+  <div class="bar"><i id="prog"></i></div>
+  <div id="measure"></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center"><b>저장한 자리 <span id="cnt">0</span>곳</b></div>
+  <div id="list"></div>
+  <div class="row" style="margin-top:10px">
+    <button class="ghost" id="shareBtn">📤 보내기</button>
+    <button class="ghost" id="csvBtn">⬇️ CSV</button>
+    <button class="ghost" id="jsonBtn">⬇️ JSON</button>
+    <button class="danger" id="clearBtn">전체 지우기</button>
+  </div>
+</div>
+
+<div class="card help">
+  <b>답사 요령</b><br>
+  • 하늘이 트인 곳에 서서 측정하세요. 정확도가 <span style="color:var(--ok)">10m 이하면 아주 좋음</span>, <span style="color:var(--mid)">20m 이하면 쓸 만함</span>, <span style="color:var(--bad)">그보다 크면 자리를 옮기는 게 좋아요</span>.<br>
+  • 같은 움이 자리를 한 번 더 저장하면, 먼저 잰 곳과 얼마나 떨어졌는지 보여 줘요. 많이 흔들리는 자리는 피하세요.<br>
+  • 움이 자리끼리는 60m 이상 떨어뜨리세요(판정 반경이 30m라 겹치지 않게).<br>
+  • 다 끝나면 "보내기"로 저(Claude)에게 결과를 전달해 주세요. 기록은 이 휴대폰에만 저장돼요.
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const STATIONS=[
+ ['insight','깨움 Insight · 교수법 특강','#2a9fd8'],
+ ['awake','깨움 A-wake · 학습법 특강','#2a9fd8'],
+ ['equip','채움 Equip · 교수역량진단','#7a8ca3'],
+ ['build','세움 Build · 학습자역량진단','#7a8ca3'],
+ ['boost','돋움 Boost · 학습 클리닉','#ec7e66'],
+ ['coach','도움 Coach · 수업컨설팅','#ec7e66'],
+ ['synergy','이음 Synergy · 학습 튜터링','#ec7e66'],
+ ['bloom','피움 Bloom · 혁신교수법적용','#ec7e66'],
+ ['heritage','세움 Heritage · 교수지원 성과기록','#4a72b8'],
+ ['check','채움 Check · 학습 점검','#4a72b8'],
+ ['identity','다움 Identity · 학습지원 성과기록','#4a72b8'],
+ ['gold','★ 황금 움이','#e8a81c'],
+ ['start','🏁 시작(본관 1층 로비)','#444'],
+ ['extra','후보 자리(아직 미정)','#999']
+];
+const KEY='umigo_survey_v1';
+const $=id=>document.getElementById(id);
+const sel=$('station');
+STATIONS.forEach(([k,n])=>{const o=document.createElement('option');o.value=k;o.textContent=n;sel.appendChild(o)});
+let points=[];
+try{points=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){points=[]}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(points))}catch(e){}};
+const info=k=>STATIONS.find(s=>s[0]===k)||STATIONS[STATIONS.length-1];
+const toast=t=>{const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),2200)};
+const accColor=a=>a<=10?'var(--ok)':a<=20?'var(--mid)':'var(--bad)';
+const accHex=a=>a<=10?'#2e9d4f':a<=20?'#e0a100':'#d64545';
+const accWord=a=>a<=10?'아주 좋음':a<=20?'쓸 만함':'자리를 옮겨 보세요';
+
+function dist(a,b){const R=6371000,toR=x=>x*Math.PI/180;const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng);
+  const h=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+
+// map
+const map=L.map('map',{zoomControl:true}).setView([35.9135,128.8190],17);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+let me=null,meCircle=null,centered=false;
+const layer=L.layerGroup().addTo(map);
+
+// live gps
+let live=null;
+if(!('geolocation' in navigator)){$('accTxt').textContent='이 브라우저는 위치 기능을 지원하지 않아요'}
+else{
+  navigator.geolocation.watchPosition(p=>{
+    live=p.coords;const a=Math.round(live.accuracy);
+    $('acc').textContent=a+'m';$('acc').style.color=accColor(a);$('dot').style.background=accColor(a);$('accTxt').textContent=accWord(a);
+    const ll=[live.latitude,live.longitude];
+    if(!me){me=L.circleMarker(ll,{radius:7,color:'#fff',weight:2,fillColor:'#1a73e8',fillOpacity:1}).addTo(map);meCircle=L.circle(ll,{radius:a,color:'#1a73e8',weight:1,fillOpacity:.08}).addTo(map)}
+    else{me.setLatLng(ll);meCircle.setLatLng(ll).setRadius(a)}
+    if(!centered){map.setView(ll,18);centered=true}
+  },err=>{$('accTxt').textContent=err.code===1?'위치 권한이 꺼져 있어요. 브라우저 설정에서 허용해 주세요':'위치를 찾는 중이에요… 밖으로 나가 보세요'},
+  {enableHighAccuracy:true,maximumAge:0,timeout:20000});
+}
+
+// 10s measurement
+$('saveBtn').onclick=()=>{
+  if(!navigator.geolocation){toast('위치 기능을 쓸 수 없어요');return}
+  const btn=$('saveBtn');btn.disabled=true;const samples=[];const T=10000;const t0=Date.now();
+  const id=navigator.geolocation.watchPosition(p=>{samples.push({lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy});
+    $('measure').textContent=`측정 중… ${samples.length}번 받음, 지금 정확도 ${Math.round(p.coords.accuracy)}m`},()=>{}, {enableHighAccuracy:true,maximumAge:0,timeout:T});
+  const timer=setInterval(()=>{$('prog').style.width=Math.min(100,(Date.now()-t0)/T*100)+'%'},100);
+  setTimeout(()=>{
+    navigator.geolocation.clearWatch(id);clearInterval(timer);$('prog').style.width='0';btn.disabled=false;
+    if(!samples.length){$('measure').textContent='위치를 받지 못했어요. 하늘이 트인 곳에서 다시 눌러 주세요.';return}
+    // drop worst samples, weight by 1/acc^2
+    samples.sort((a,b)=>a.acc-b.acc);const use=samples.slice(0,Math.max(1,Math.ceil(samples.length*0.7)));
+    let w=0,la=0,ln=0;use.forEach(s=>{const k=1/(s.acc*s.acc);w+=k;la+=s.lat*k;ln+=s.lng*k});
+    const accs=use.map(s=>s.acc);const med=accs[Math.floor(accs.length/2)];
+    const p={id:Date.now(),station:sel.value,memo:$('memo').value.trim(),lat:+(la/w).toFixed(7),lng:+(ln/w).toFixed(7),acc:Math.round(med),n:samples.length,time:new Date().toISOString()};
+    points.push(p);save();render();
+    const same=points.filter(q=>q.station===p.station&&q.id!==p.id);
+    let msg=`저장했어요! 정확도 ${p.acc}m (${accWord(p.acc)})`;
+    if(same.length)msg+=` · 먼저 잰 같은 자리와 ${Math.round(dist(p,same[same.length-1]))}m 차이`;
+    $('measure').textContent=msg;$('memo').value='';toast('📍 저장 완료');
+    map.setView([p.lat,p.lng],18);
+  },T);
+};
+
+function render(){
+  layer.clearLayers();$('cnt').textContent=points.length;
+  const list=$('list');list.innerHTML='';
+  if(!points.length){list.innerHTML='<div class="help">아직 저장한 자리가 없어요.</div>';return}
+  const sorted=[...points].sort((a,b)=>STATIONS.findIndex(s=>s[0]===a.station)-STATIONS.findIndex(s=>s[0]===b.station)||a.id-b.id);
+  sorted.forEach(p=>{
+    const [k,name,color]=info(p.station);
+    L.circle([p.lat,p.lng],{radius:30,color,weight:1,fillOpacity:.12}).addTo(layer);
+    L.circleMarker([p.lat,p.lng],{radius:7,color:'#fff',weight:2,fillColor:color,fillOpacity:1}).bindPopup(`<b>${name}</b><br>${p.memo||''}<br>정확도 ${p.acc}m`).addTo(layer);
+    // warnings: other stations too close
+    const near=points.filter(q=>q.station!==p.station&&!['extra','start'].includes(q.station)&&!['extra','start'].includes(p.station)&&dist(p,q)<60);
+    const div=document.createElement('div');div.className='item';
+    div.innerHTML=`<span class="tag" style="background:${color}">${name.split(' · ')[0]}</span>
+      <div class="t">${p.memo?escapeHtml(p.memo):'<span style="color:#aaa">메모 없음</span>'}
+        <small><span style="color:${accHex(p.acc)}">● 정확도 ${p.acc}m</span> · ${new Date(p.time).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>
+        ${near.length?`<div class="warn">⚠️ ${near.map(q=>info(q.station)[1].split(' · ')[0]+' '+Math.round(dist(p,q))+'m').join(', ')} — 60m보다 가까워요</div>`:''}
+      </div><button class="x" title="지우기">✕</button>`;
+    div.querySelector('.t').onclick=()=>{map.setView([p.lat,p.lng],19)};
+    div.querySelector('.x').onclick=()=>{if(confirmDel(p)){points=points.filter(q=>q.id!==p.id);save();render()}};
+    list.appendChild(div);
+  });
+}
+// inline confirm without blocking dialogs: tap ✕ twice
+let pendingDel=null;
+function confirmDel(p){if(pendingDel===p.id){pendingDel=null;return true}pendingDel=p.id;toast('한 번 더 누르면 지워져요');setTimeout(()=>{if(pendingDel===p.id)pendingDel=null},3000);return false}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function toCSV(){const h='움이,이름,메모,위도,경도,정확도m,측정횟수,시각';
+  return [h,...points.map(p=>{const n=info(p.station)[1];return [p.station,n,p.memo,p.lat,p.lng,p.acc,p.n,p.time].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')})].join('\n')}
+function download(name,text,type){const b=new Blob(['﻿'+text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+const stamp=()=>new Date().toISOString().slice(0,16).replace(/[-:T]/g,'');
+$('csvBtn').onclick=()=>download(`움이고_답사_${stamp()}.csv`,toCSV(),'text/csv');
+$('jsonBtn').onclick=()=>download(`움이고_답사_${stamp()}.json`,JSON.stringify(points,null,1),'application/json');
+$('shareBtn').onclick=async()=>{
+  const text=JSON.stringify(points);
+  try{
+    const file=new File([JSON.stringify(points,null,1)],`움이고_답사_${stamp()}.json`,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'움이고 답사 결과'});return}
+    if(navigator.share){await navigator.share({title:'움이고 답사 결과',text});return}
+  }catch(e){if(e.name==='AbortError')return}
+  try{await navigator.clipboard.writeText(text);toast('복사했어요! 채팅에 붙여 넣어 주세요')}catch(e){download(`움이고_답사_${stamp()}.json`,text,'application/json')}
+};
+let clearArm=false;
+$('clearBtn').onclick=()=>{if(!clearArm){clearArm=true;toast('정말 지우려면 한 번 더 누르세요');setTimeout(()=>clearArm=false,3000);return}
+  points=[];save();render();clearArm=false;toast('모두 지웠어요')};
+render();
+</script>
+</body>
+</html>
