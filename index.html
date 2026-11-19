@@ -20,6 +20,9 @@ button,input{font-family:inherit}
 .btn{border:0;border-radius:18px;font-family:Jua,sans-serif;font-size:22px;height:58px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;text-decoration:none;width:100%}
 .btn-green{background:var(--green);color:#fff;box-shadow:0 6px 0 var(--green-d)}
 .btn-green:active{transform:translateY(4px);box-shadow:0 2px 0 var(--green-d)}
+.btn-gold{background:var(--gold);color:#2A2215;box-shadow:0 6px 0 #B98A00;animation:glowb 1.2s ease-in-out infinite}
+@keyframes glowb{0%,100%{filter:brightness(1)}50%{filter:brightness(1.12)}}
+.btn-wait{background:#E9E0CB;color:#7A6E5C;box-shadow:none}
 .btn-white{background:#fff;color:var(--ink);border:2px solid #D9CBA6;font-family:'Noto Sans KR';font-weight:700;font-size:16px;height:52px}
 .btn[disabled]{opacity:.5}
 .round{width:46px;height:46px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -156,7 +159,8 @@ button,input{font-family:inherit}
     <div class="sig" id="sig" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <button class="btn btn-green" id="toScan" style="font-size:21px;height:54px">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 12h8"/></svg>
-      움이 포스터 QR 찍기</button>
+      <span id="mainTxt">움이 포스터 QR 찍기</span></button>
+    <button id="qrAlt" style="display:none;border:0;background:none;color:var(--mute);font-size:13px;text-decoration:underline;cursor:pointer;margin-top:-6px;font-family:inherit">GPS가 잘 안 되면 QR로 잡기</button>
   </div>
 </section>
 
@@ -387,6 +391,7 @@ function startGPS() {
 }
 function updateSheet() {
   if (!S.st) return;
+  S.inZone = null; setTimeout(setMainBtn, 0);
   const bars = [...$('sig').children];
   const setBars = (n, c) => bars.forEach((b, i) => b.style.background = i < n ? c : '#F1E6D0');
   const indoor = S.st.settings.indoor_mode === true || S.st.settings.indoor_mode === 'true';
@@ -398,14 +403,16 @@ function updateSheet() {
   const withLoc = left.filter(s => s.lat != null);
   if (!withLoc.length) { $('sigTitle').textContent = '움이가 숨어 있어요'; $('sigSub').textContent = '캠퍼스를 돌며 움이 포스터를 찾아요'; setBars(0); return; }
   let best = null, bd = 1e9; withLoc.forEach(s => { const d = UMIGO.dist(S.pos, s); if (d < bd) { bd = d; best = s; } });
-  const edge = Math.max(0, bd - best.radius);
+  const slack = Math.min(S.pos.acc || 0, Number(S.st.settings.gps_slack ?? 15));
+  const edge = Math.max(0, bd - best.radius - slack);
+  if (edge <= 0) S.inZone = best;
   const n = edge <= 0 ? 4 : edge < 20 ? 3 : edge < 50 ? 2 : edge < 100 ? 1 : 0;
   setBars(n, best.color); $('sigSvg').style.color = best.color; $('sigIcon').style.background = best.color + '22';
   const word = best.is_gold ? '황금' : UMIGO.colorWord(best.color);
-  if (n === 4) { $('sigTitle').textContent = '움이가 바로 근처에!'; $('sigSub').innerHTML = `<b style="color:${best.color}">${word}</b> 구역 안이에요. 포스터를 찾아보세요`; }
+  if (n === 4) { $('sigTitle').textContent = best.is_gold ? '황금 움이가 나타났어요!' : '움이가 나타났어요!'; $('sigSub').innerHTML = gpsMode() ? `<b style="color:${best.color}">${word}</b> 구역 안이에요. 아래 버튼을 눌러 잡아요!` : `<b style="color:${best.color}">${word}</b> 구역 안이에요. 포스터를 찾아보세요`; }
   else if (n >= 1) { $('sigTitle').textContent = '움이 기운이 느껴져요!'; $('sigSub').innerHTML = `${word} 움이 · 약 <b style="color:${best.color}">${Math.round(bd)}m</b>`; }
   else { $('sigTitle').textContent = '움이를 찾아 걸어 볼까요?'; $('sigSub').innerHTML = `가장 가까운 ${word} 움이까지 약 ${Math.round(bd)}m`; }
-  if (S.lastNear !== n) { if (n > (S.lastNear ?? 0) && n >= 2) vib(n === 4 ? [80, 60, 80, 60, 160] : [60]); S.lastNear = n; }
+  if (S.lastNear !== n) { if (n > (S.lastNear ?? 0) && n >= 2) { vib(n === 4 ? [80, 60, 80, 60, 160] : [60]); if (n === 4) { blip(880, .12); toast(gpsMode() ? '움이가 나타났어요! 잡기를 눌러요' : '움이 구역이에요! 포스터를 찾아요'); } } S.lastNear = n; }
 }
 function updateChips() {
   const n = normalCount(), th = threshold(), p = S.st.player;
@@ -417,7 +424,34 @@ function updateChips() {
 }
 $('toDex').addEventListener('click', () => show('dex'));
 $('prizeChip').addEventListener('click', () => allCount() >= threshold() ? openPrize() : show('dex'));
-$('toScan').addEventListener('click', () => show('scan'));
+$('toScan').addEventListener('click', () => {
+  if (!gpsMode()) { show('scan'); return; }
+  if (S.inZone) { catchGPS(S.inZone); return; }
+  toast(S.pos ? '움이 구역(지도의 동그라미) 안에 들어가면 잡을 수 있어요' : '위치를 찾는 중이에요. 잘 안 되면 아래 QR로 잡기를 눌러요');
+});
+$('qrAlt').addEventListener('click', () => show('scan'));
+function gpsMode() { const st = S.st?.settings || {}; const indoor = st.indoor_mode === true || st.indoor_mode === 'true'; return !indoor && (st.catch_mode ?? 'gps') === 'gps'; }
+function setMainBtn() {
+  const b = $('toScan');
+  if (!gpsMode()) { b.className = 'btn btn-green'; $('mainTxt').textContent = '움이 포스터 QR 찍기'; $('qrAlt').style.display = 'none'; return; }
+  $('qrAlt').style.display = '';
+  if (S.inZone) { b.className = 'btn btn-gold'; $('mainTxt').textContent = (S.inZone.is_gold ? '황금 움이' : '움이') + ' 잡기!'; }
+  else { b.className = 'btn btn-wait'; $('mainTxt').textContent = '움이 구역으로 걸어가요'; }
+}
+let nearBusy = false;
+async function catchGPS(s) {
+  if (nearBusy || !S.pos) return; nearBusy = true;
+  try {
+    const r = await UMIGO.rpc('umigo_near', { p_token: S.token, p_station: s.id, p_lat: S.pos.lat, p_lng: S.pos.lng, p_acc: S.pos.acc });
+    if (r.error === 'TOO_FAR') { toast(`아직 조금 멀어요 (약 ${r.dist}m).<br>동그라미 가운데로 더 가 볼까요?`); return; }
+    if (r.error === 'QR_MODE') { await loadState(); setMainBtn(); toast('지금은 QR로 잡는 시간이에요'); show('scan'); return; }
+    if (r.error === 'GOLD_SLEEP') { toast('황금 움이는 정각에만 나타나요!<br>' + goldNextText(r.gold), 3500); return; }
+    if (r.error) { toast('이 움이는 지금 쉬는 중이에요'); return; }
+    if (r.already) { toast(`<b>${UMIGO.esc(r.station.name)}</b>는 이미 잡았어요!`); return; }
+    S.cur = { code: r.ticket, s: r.station }; startCatch();
+  } catch (e) { toast('연결이 잠깐 끊겼어요. 다시 눌러 주세요'); }
+  finally { nearBusy = false; }
+}
 
 // ---------- QR ----------
 let scanStream, scanRaf, detector;

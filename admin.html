@@ -75,6 +75,8 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:2px solid var(--l
     <label class="sw"><span>잡기 횟수<small>움이를 몇 번 톡톡해야 할까요</small></span><input type="number" min="1" max="15" data-k="taps" style="width:90px"></label>
     <label class="sw"><span>움이 속도<small>1.0 보통 · 0.6 느리게 · 1.5 빠르게</small></span><input type="number" step="0.1" min="0.3" max="3" data-k="umi_speed" style="width:90px"></label>
     <label class="sw"><span>마그네틱 전체 수량</span><input type="number" min="0" data-k="magnets_total" style="width:90px"></label>
+    <label class="sw"><span>잡기 방식<small>GPS: 구역에 들어가면 잡기 · QR: 포스터를 찍어야 잡기</small></span><select data-k="catch_mode"><option value="gps">GPS로 잡기</option><option value="qr">QR로 잡기</option></select></label>
+    <label class="sw"><span>GPS 여유 거리(m)<small>휴대폰 오차를 이만큼까지 봐줘요 · 기본 15</small></span><input type="number" min="0" max="40" data-k="gps_slack" style="width:90px"></label>
     <label class="sw"><span>실내 모드<small>비 올 때: GPS 없이 QR로만 진행</small></span><input type="checkbox" data-k="indoor_mode" style="width:26px;height:26px"></label>
     <div style="padding-top:14px" class="jua">황금 움이</div>
     <label class="sw"><span>출현 시각(시)<small>쉼표로 구분 · 예) 12,13,14,15</small></span><input data-k="gold_hours" style="width:150px"></label>
@@ -91,6 +93,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:2px solid var(--l
     <textarea id="surveyTxt" placeholder='[{"station":"insight","lat":..., ...}]'></textarea>
     <div class="row" style="margin-top:8px"><input type="file" id="surveyFile" accept=".json,application/json" style="font-size:14px;flex:1"><button class="btn g" id="importBtn">좌표 넣기</button></div>
   </div>
+  <div class="card"><h2>지도에서 겹침 보기</h2><div id="stMap" style="height:380px;border-radius:14px"></div><div id="overlap" style="margin-top:10px;font-size:14px"></div></div>
   <div class="card"><h2>스테이션</h2><div style="overflow-x:auto"><table id="stTable"></table></div></div>
 </section>
 
@@ -109,6 +112,8 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:2px solid var(--l
 </div>
 </div>
 <div class="toast" id="toast"></div>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<script src="vendor/leaflet/leaflet.js"></script>
 <script src="js/umigo.js"></script>
 <script>
 (() => {
@@ -169,6 +174,7 @@ $('saveSet').addEventListener('click', async () => {
   for (const el of document.querySelectorAll('[data-k]')) {
     const k = el.dataset.k; let v;
     if (el.type === 'checkbox') v = el.checked;
+    else if (el.tagName === 'SELECT') v = el.value;
     else if (k === 'gold_hours') v = el.value.split(',').map(x => parseInt(x)).filter(x => x >= 0 && x < 24);
     else v = Number(el.value);
     await A('set', { k, v });
@@ -183,6 +189,26 @@ async function loadStations() {
     <td><input type="number" value="${s.radius}" data-rad="${s.id}" style="width:70px;padding:6px;font-size:14px"></td>
     <td style="font-family:monospace">${E(s.qr_code)}</td>
     <td><input type="checkbox" ${s.active ? 'checked' : ''} data-act="${s.id}" style="width:22px;height:22px"></td></tr>`).join('');
+  drawMap(r);
+}
+let smap, slayer;
+function drawMap(list) {
+  if (!smap) { smap = L.map('stMap').setView([35.9135, 128.8190], 17); L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '© OpenStreetMap © CARTO' }).addTo(smap); slayer = L.layerGroup().addTo(smap); }
+  setTimeout(() => smap.invalidateSize(), 50);
+  slayer.clearLayers();
+  const pts = list.filter(s => s.lat != null && s.active);
+  pts.forEach(s => {
+    L.circle([s.lat, s.lng], { radius: s.radius, color: s.color, weight: 2, fillOpacity: .15 }).bindTooltip(s.name, { permanent: true, direction: 'center', className: '' }).addTo(slayer);
+  });
+  if (pts.length) smap.fitBounds(pts.map(s => [s.lat, s.lng]), { padding: [40, 40] });
+  const warn = [];
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+    const d = UMIGO.dist(pts[i], pts[j]), need = pts[i].radius + pts[j].radius;
+    if (d < need) warn.push(`<li><b>${E(pts[i].name)}</b> ↔ <b>${E(pts[j].name)}</b>: ${Math.round(d)}m (겹침 ${Math.round(need - d)}m)</li>`);
+  }
+  $('overlap').innerHTML = !pts.length ? '좌표가 들어간 스테이션이 아직 없어요.' : warn.length
+    ? `<div class="bad">겹치는 구역 ${warn.length}쌍</div><ul style="margin:6px 0 0;padding-left:20px">${warn.join('')}</ul><div style="color:#5C5346;margin-top:6px">겹치면 두 움이 중 가까운 쪽이 먼저 잡혀요. 반경을 줄이거나 자리를 옮기면 풀려요.</div>`
+    : '<span class="ok">겹치는 구역이 없어요 👍</span>';
 }
 document.addEventListener('change', async e => {
   if (e.target.dataset.act) { await A('set_station', { id: e.target.dataset.act, active: e.target.checked }); toast('바꿨어요'); }
