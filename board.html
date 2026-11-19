@@ -74,7 +74,7 @@ function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); $('s
 addEventListener('resize', fit); fit();
 try { const q = qrcode(0, 'M'); q.addData(UMIGO.site); q.make(); $('qr').innerHTML = q.createSvgTag({ cellSize: 6, margin: 0, scalable: true }); $('qr').firstChild.style.width = $('qr').firstChild.style.height = '100%'; } catch (e) {}
 const ago = t => { const m = Math.floor((Date.now() - new Date(t)) / 60000); return m < 1 ? '방금' : m + '분 전'; };
-let lastTop = null, wasGold = false;
+let lastTop, wasGold = false;
 async function tick() {
   let r; try { r = await UMIGO.rpc('umigo_board'); } catch (e) { return; }
   $('nP').textContent = r.players; if (r.prize_threshold) $('thTxt').textContent = r.prize_threshold; $('nC').textContent = r.catches;
