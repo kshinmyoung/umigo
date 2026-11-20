@@ -66,6 +66,16 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:2px solid var(--l
 <section data-p="stats" class="hide">
   <div class="card"><h2>지금 현황</h2><div class="stat" id="statBox"></div></div>
   <div class="card"><h2>움이별 포획 수</h2><table id="perStation"></table></div>
+  <div class="card">
+    <h2>시험 기록 지우기</h2>
+    <p style="font-size:14px;color:var(--sub);margin:0 0 10px">시범으로 해 본 닉네임 하나를 지워요. 그 사람이 잡은 움이와 경품 번호도 함께 지워져요.</p>
+    <form id="delForm" class="row"><input id="delQ" placeholder="닉네임 또는 UM-번호" style="flex:1;min-width:180px" autocomplete="off"><button class="btn r">이 기록 지우기</button></form>
+  </div>
+  <div class="card" style="border:2px solid #F3C9C4">
+    <h2>행사 전 전체 초기화</h2>
+    <p style="font-size:14px;color:var(--sub);margin:0 0 10px">리허설이 끝나고 행사 직전에 한 번만 쓰세요. <b>모든 참가자·포획·경품 기록</b>이 지워지고 되돌릴 수 없어요. 스테이션 좌표와 설정은 그대로 남아요.</p>
+    <form id="resetForm" class="row"><input id="resetQ" placeholder="'초기화'라고 입력" style="flex:1;min-width:180px" autocomplete="off"><button class="btn r">전체 초기화</button></form>
+  </div>
 </section>
 
 <section data-p="settings" class="hide">
@@ -213,6 +223,20 @@ function drawMap(list) {
 document.addEventListener('change', async e => {
   if (e.target.dataset.act) { await A('set_station', { id: e.target.dataset.act, active: e.target.checked }); toast('바꿨어요'); }
   if (e.target.dataset.rad) { await A('set_station', { id: e.target.dataset.rad, radius: Number(e.target.value) }); toast('반경을 바꿨어요'); }
+});
+$('delForm').addEventListener('submit', async e => {
+  e.preventDefault(); let q = $('delQ').value.trim(); if (!q) return; if (/^\d{4}$/.test(q)) q = 'UM-' + q;
+  if (delForm.armed !== q) { delForm.armed = q; toast(`한 번 더 누르면 "${q}" 기록을 지워요`); setTimeout(() => { if (delForm.armed === q) delForm.armed = null; }, 4000); return; }
+  delForm.armed = null;
+  const r = await A('delete_player', { q });
+  if (r.ok) { toast(`${r.nickname} 기록을 지웠어요`); $('delQ').value = ''; refresh(); } else toast('그 닉네임을 찾지 못했어요');
+});
+const delForm = $('delForm');
+$('resetForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if ($('resetQ').value.trim() !== '초기화') { toast("칸에 '초기화'라고 정확히 입력해 주세요"); return; }
+  const r = await A('reset_all', { confirm: '초기화' });
+  if (r.ok) { toast('모든 기록을 지웠어요. 행사 준비 완료!'); $('resetQ').value = ''; refresh(true); } else toast('초기화하지 못했어요');
 });
 $('surveyFile').addEventListener('change', async e => { const f = e.target.files[0]; if (f) $('surveyTxt').value = await f.text(); });
 $('importBtn').addEventListener('click', async () => {
