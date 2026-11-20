@@ -88,8 +88,8 @@ async function tick() {
   const g = r.gold;
   if (g.active) {
     $('goldLbl').textContent = '황금 움이 출현 중!';
-    $('goldTxt').textContent = g.ends_at ? `${Math.max(0, Math.ceil((new Date(g.ends_at) - Date.now()) / 60000))}분 남음` : '지금!';
-    if (!wasGold) { $('alertSub').textContent = `${g.minutes}분 동안만 머물러요 · 지도의 ★을 찾아가요`; $('alert').classList.add('on'); setTimeout(() => $('alert').classList.remove('on'), 12000); }
+    $('goldTxt').textContent = g.ends_at ? `${Math.max(0, Math.ceil((new Date(g.ends_at) - Date.now()) / 60000))}분 남음` : '지금!'; if (g.where) $('goldLbl').textContent = '황금 움이 · ' + g.where;
+    if (!wasGold) { $('alertSub').textContent = `${g.where ? g.where + '에 나타났어요 · ' : ''}${g.minutes}분 동안만 머물러요`; $('alert').classList.add('on'); setTimeout(() => $('alert').classList.remove('on'), 12000); }
   } else if (g.next_at) {
     const d = new Date(g.next_at), m = Math.max(0, Math.ceil((d - Date.now()) / 60000));
     $('goldLbl').textContent = '다음 황금 움이'; $('goldTxt').textContent = `${d.getHours()}:00 · ${m}분 후`;

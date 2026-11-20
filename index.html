@@ -419,6 +419,8 @@ function updateSheet() {
   if (!withLoc.length) { $('sigTitle').textContent = '움이가 숨어 있어요'; $('sigSub').textContent = '캠퍼스를 돌며 움이 포스터를 찾아요'; setBars(0); return; }
   let best = null, bd = 1e9; withLoc.forEach(s => { const d = UMIGO.dist(S.pos, s); if (d < bd) { bd = d; best = s; } });
   const slack = Math.min(S.pos.acc || 0, Number(S.st.settings.gps_slack ?? 15));
+  const goldS = withLoc.find(s => s.is_gold);
+  if (goldS && best !== goldS && UMIGO.dist(S.pos, goldS) <= goldS.radius + slack) { best = goldS; bd = UMIGO.dist(S.pos, goldS); }
   const edge = Math.max(0, bd - best.radius - slack);
   if (edge <= 0) S.inZone = best;
   const n = edge <= 0 ? 4 : edge < 20 ? 3 : edge < 50 ? 2 : edge < 100 ? 1 : 0;
