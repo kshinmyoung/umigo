@@ -362,18 +362,33 @@ let map, layer, meMk;
 function initMap() {
   if (map) return;
   map = L.map('map', { zoomControl: false, attributionControl: true }).setView([35.9135, 128.8190], 17);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '© OpenStreetMap © CARTO' }).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   layer = L.layerGroup().addTo(map);
+}
+function reveal() { return (S.st?.settings?.map_reveal ?? 'hidden'); }
+function fuzzCenter(s) {
+  let h = 0; for (const ch of s.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const ang = (h % 360) * Math.PI / 180, m = 18 + (h % 17);
+  return [s.lat + (m * Math.sin(ang)) / 110540, s.lng + (m * Math.cos(ang)) / (111320 * Math.cos(s.lat * Math.PI / 180))];
 }
 function renderMap() {
   if (!S.st) return; initMap(); layer.clearLayers();
-  const ids = caughtIds(); const pts = [];
+  const ids = caughtIds(), mode = reveal(), pts = [];
   S.st.stations.forEach(s => {
     if (s.lat == null || !s.active) return;
     pts.push([s.lat, s.lng]);
-    L.circle([s.lat, s.lng], { radius: s.radius, color: s.color, weight: 2, dashArray: ids.has(s.id) ? null : '6 6', fillColor: s.color, fillOpacity: .12 }).addTo(layer);
-    const html = ids.has(s.id) ? `<div class="zone got" style="border-color:${s.color}"><img src="${UMIGO.img(s.img)}" alt=""></div>` : `<div class="zone" style="border-color:${s.color};color:${s.color}">${s.is_gold ? '★' : '?'}</div>`;
-    L.marker([s.lat, s.lng], { icon: L.divIcon({ html, className: '', iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: false }).addTo(layer);
+    const got = ids.has(s.id);
+    if (got) {
+      L.circle([s.lat, s.lng], { radius: s.radius, color: s.color, weight: 2, fillColor: s.color, fillOpacity: .12 }).addTo(layer);
+      L.marker([s.lat, s.lng], { icon: L.divIcon({ html: `<div class="zone got" style="border-color:${s.color}"><img src="${UMIGO.img(s.img)}" alt=""></div>`, className: '', iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: false }).addTo(layer);
+      return;
+    }
+    if (mode === 'exact') {
+      L.circle([s.lat, s.lng], { radius: s.radius, color: s.color, weight: 2, dashArray: '6 6', fillColor: s.color, fillOpacity: .12 }).addTo(layer);
+      L.marker([s.lat, s.lng], { icon: L.divIcon({ html: `<div class="zone" style="border-color:${s.color};color:${s.color}">${s.is_gold ? '★' : '?'}</div>`, className: '', iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: false }).addTo(layer);
+    } else if (mode === 'fuzzy' || s.is_gold) {
+      L.circle(fuzzCenter(s), { radius: s.is_gold ? 65 : 55, color: s.color, weight: 1.5, dashArray: '2 8', fillColor: s.color, fillOpacity: s.is_gold ? .16 : .08 }).addTo(layer);
+    }
   });
   if (!renderMap.fitted && pts.length && !S.pos) { map.fitBounds(pts, { padding: [40, 120] }); renderMap.fitted = true; }
   updateSheet();
@@ -409,7 +424,12 @@ function updateSheet() {
   const n = edge <= 0 ? 4 : edge < 20 ? 3 : edge < 50 ? 2 : edge < 100 ? 1 : 0;
   setBars(n, best.color); $('sigSvg').style.color = best.color; $('sigIcon').style.background = best.color + '22';
   const word = best.is_gold ? '황금' : UMIGO.colorWord(best.color);
-  if (n === 4) { $('sigTitle').textContent = best.is_gold ? '황금 움이가 나타났어요!' : '움이가 나타났어요!'; $('sigSub').innerHTML = gpsMode() ? `<b style="color:${best.color}">${word}</b> 구역 안이에요. 아래 버튼을 눌러 잡아요!` : `<b style="color:${best.color}">${word}</b> 구역 안이에요. 포스터를 찾아보세요`; }
+  const secret = reveal() !== 'exact';
+  if (secret && n < 4) {
+    const t = ['움이를 찾아 걸어 볼까요?', '희미한 움이 기운…', '움이 기운이 느껴져요!', '바로 근처예요! 두리번두리번'][n];
+    $('sigTitle').textContent = t;
+    $('sigSub').innerHTML = n >= 2 ? `<b style="color:${best.color}">${word}</b> 움이가 가까이 있어요` : n === 1 ? '이쪽 방향이 맞는 것 같아요' : '신호 막대가 차오르는 쪽으로 걸어 봐요';
+  } else if (n === 4) { $('sigTitle').textContent = best.is_gold ? '황금 움이가 나타났어요!' : '움이가 나타났어요!'; $('sigSub').innerHTML = gpsMode() ? `<b style="color:${best.color}">${word}</b> 구역 안이에요. 아래 버튼을 눌러 잡아요!` : `<b style="color:${best.color}">${word}</b> 구역 안이에요. 포스터를 찾아보세요`; }
   else if (n >= 1) { $('sigTitle').textContent = '움이 기운이 느껴져요!'; $('sigSub').innerHTML = `${word} 움이 · 약 <b style="color:${best.color}">${Math.round(bd)}m</b>`; }
   else { $('sigTitle').textContent = '움이를 찾아 걸어 볼까요?'; $('sigSub').innerHTML = `가장 가까운 ${word} 움이까지 약 ${Math.round(bd)}m`; }
   if (S.lastNear !== n) { if (n > (S.lastNear ?? 0) && n >= 2) { vib(n === 4 ? [80, 60, 80, 60, 160] : [60]); if (n === 4) { blip(880, .12); toast(gpsMode() ? '움이가 나타났어요! 잡기를 눌러요' : '움이 구역이에요! 포스터를 찾아요'); } } S.lastNear = n; }
